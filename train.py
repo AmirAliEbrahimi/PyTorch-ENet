@@ -44,12 +44,20 @@ class Train:
             outputs = self.model(inputs)
 
             # Loss computation
+#            print(outputs.shape)
+#            print(labels.shape)
             loss = self.criterion(outputs, labels)
 
             # Backpropagation
             self.optim.zero_grad()
             loss.backward()
+            for p in list(self.model.parameters()):
+                if hasattr(p,'org'):
+                    p.data.copy_(p.org)
             self.optim.step()
+            for p in list(self.model.parameters()):
+                if hasattr(p,'org'):
+                    p.org.copy_(p.data.clamp_(-1,1))
 
             # Keep track of loss for current epoch
             epoch_loss += loss.item()

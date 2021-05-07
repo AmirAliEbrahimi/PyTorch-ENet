@@ -7,10 +7,13 @@ import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
+from torchsummary import summary
+
 from PIL import Image
 
 import transforms as ext_transforms
 from models.enet import ENet
+from models.bden import BDEN
 from train import Train
 from test import Test
 from metric.iou import IoU
@@ -136,15 +139,23 @@ def load_dataset(dataset):
             test_loader), class_weights, class_encoding
 
 
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        torch.nn.init.xavier_uniform_(m.weight.data)
+        if m.bias is not None:
+            torch.nn.init.zeros_(m.bias)
+
 def train(train_loader, val_loader, class_weights, class_encoding):
     print("\nTraining...\n")
 
     num_classes = len(class_encoding)
 
     # Intialize ENet
-    model = ENet(num_classes).to(device)
+    model = BDEN(num_classes).to(device)
+    summary(model,(3,360,480))
     # Check if the network architecture is correct
     print(model)
+    model.apply(weights_init)
 
     # We are going to use the CrossEntropyLoss loss function as it's most
     # frequentely used in classification problems with multiple classes which
@@ -152,10 +163,10 @@ def train(train_loader, val_loader, class_weights, class_encoding):
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     # ENet authors used Adam as the optimizer
-    optimizer = optim.Adam(
+    optimizer = optim.SGD(
         model.parameters(),
         lr=args.learning_rate,
-        weight_decay=args.weight_decay)
+        momentum=0.9)
 
     # Learning rate decay scheduler
     lr_updater = lr_scheduler.StepLR(optimizer, args.lr_decay_epochs,
@@ -305,11 +316,11 @@ if __name__ == '__main__':
         if args.mode.lower() == 'test':
             # Intialize a new ENet model
             num_classes = len(class_encoding)
-            model = ENet(num_classes).to(device)
+            model = BDEN(num_classes).to(device)
 
         # Initialize a optimizer just so we can retrieve the model from the
         # checkpoint
-        optimizer = optim.Adam(model.parameters())
+        optimizer = optim.SGD(model.parameters(),lr=0.001,momentum=0.9)
 
         # Load the previoulsy saved model state to the ENet model
         model = utils.load_checkpoint(model, optimizer, args.save_dir,
